@@ -23,8 +23,19 @@ Settings can be found in the block configuration.
     the calendar when hovering over a date, such as "12 events." Enter a
     comma-separated words for numbers (e.g. `event, events`).
 
-  - **Tooltip type**: Tooltips can display the amount of nodes to date or
-    display links to nodes.
+  - **Link type**: Controls what happens when a person clicks on a date that
+    has events. Each block (Simple and Full) has its own independent link type
+    setting. Options are:
+    - **Modal popup**: Shows a small dialog listing the first few event titles
+      with a link to the full listing page. The number of events shown is
+      configurable. Recommended for the simple sidebar block.
+    - **Link to the listing page**: Navigates to a calendar listing page at
+      `/calendar/YYYY/MM/DD` showing all events for that date. Recommended for
+      the simple sidebar block when a popup is not desired.
+    - **Link directly to the node**: Navigates directly to the first event node
+      for that date. Works best when there is typically one event per day.
+      Recommended for the full calendar block, where event titles are already
+      visible within each day cell.
 
   - **Separate nodes by language**: For multilingual sites. Nodes can be
     selected in the language in which they were created.
