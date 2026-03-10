@@ -68,6 +68,43 @@ a.pretty-calendar--link {
   white-space: wrap;
 }
 
+.pretty-calendar--day-content .item-list ul,
+.pretty-calendar--day-content ul,
+.pretty-calendar--day-content li {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pretty-calendar--day-content li {
+  line-height: 1.3;
+  margin-bottom: 13px;
+}
+
+.pretty-calendar--day-content .views-field {
+  margin: 0;
+  padding: 0;
+}
+
+/* Stretched link for listing-page mode: makes the entire full-calendar day
+ * cell clickable via the day number link. Event titles are de-styled to plain
+ * text since they can't be individually clicked. In node mode this is not
+ * applied, so each event title remains an independent link to its node. */
+.pretty-calendar--full.pretty-calendar--link .pretty-calendar--day {
+  position: relative;
+}
+
+.pretty-calendar--full.pretty-calendar--link a.pretty-calendar--link__link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.pretty-calendar--full.pretty-calendar--link .pretty-calendar--day-content a {
+  color: inherit;
+  text-decoration: none;
+}
+
 .pretty-calendar--full.pretty-calendar--popup {
   .pretty-calendar--link__link {
     display: none;

@@ -150,6 +150,21 @@
     .pretty-calendar--value {
       font-size: 1.25rem;
     }
+
+    .pretty-calendar--day-content {
+      font-size: .875rem;
+
+      .item-list ul {
+        list-style: none;
+        margin: .25rem 0 0;
+        padding: 0;
+      }
+
+      .item-list li {
+        margin: 0 0 7px 0;
+        padding: .1rem 0;
+      }
+    }
   }
 
   .calendar-day-content {
