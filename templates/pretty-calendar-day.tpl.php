@@ -27,7 +27,7 @@
     <a href="<?php print $link_path; ?>" title="<?php print $link_title; ?>" class="<?php print $link_class; ?> pretty-calendar--link__link">
       <h3 class="pretty-calendar--value">
         <span aria-hidden="true"><?php print $day_number; ?></span>
-        <span class="visually-hidden"><?php print $day_number_a11y; ?></span>
+        <span class="element-invisible"><?php print $day_number_a11y; ?></span>
       </h3>
     </a>
   <?php endif; ?>
@@ -35,13 +35,13 @@
     <a href="<?php print $popup_path; ?>" title="<?php print $link_title; ?>" class="<?php print $link_class; ?> pretty-calendar--link__popup use-ajax" data-dialog="true" data-dialog-options=<?php print $link_dialog_options; ?> aria-haspopup="modal">
       <h3 class="pretty-calendar--value">
         <span aria-hidden="true"><?php print $day_number; ?></span>
-        <span class="visually-hidden"><?php print $day_number_a11y; ?></span>
+        <span class="element-invisible"><?php print $day_number_a11y; ?></span>
       </h3>
     </a>
   <?php elseif (!$count) : ?>
     <h3 class="pretty-calendar--value">
         <span aria-hidden="true"><?php print $day_number; ?></span>
-        <span class="visually-hidden"><?php print $day_number_a11y; ?></span>
+        <span class="element-invisible"><?php print $day_number_a11y; ?></span>
     </h3>
   <?php endif; ?>
 
