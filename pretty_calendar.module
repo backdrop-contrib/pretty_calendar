@@ -60,6 +60,8 @@ function pretty_calendar_theme() {
         'month_next_text' => NULL,
         'month_name' => NULL,
         'calendar_classes' => NULL,
+        'month' => NULL,
+        'mobile_breakpoint' => 0,
       ),
     ),
     'pretty_calendar_week' => array(
@@ -264,6 +266,31 @@ function pretty_calendar_block_configure($delta = '') {
     '#description' => t('If checked nodes will be selected in the language in which they were created.'),
   );
 
+  if ($delta == 'pretty_calendar_full') {
+    $mobile_simple = $config->get('mobile_simple_' . $delta);
+    $form['mobile_simple'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Switch to simple calendar on small screens'),
+      '#default_value' => ($mobile_simple !== NULL) ? $mobile_simple : 1,
+      '#description' => t('On narrow viewports, automatically display the compact calendar instead of the full calendar.'),
+    );
+    $form['mobile_breakpoint'] = array(
+      '#type' => 'number',
+      '#title' => t('Mobile breakpoint (pixels)'),
+      '#default_value' => (int) $config->get('mobile_breakpoint_' . $delta) ?: 640,
+      '#min' => 320,
+      '#max' => 1200,
+      '#step' => 10,
+      '#size' => 6,
+      '#description' => t('Switch to simple calendar when the viewport is narrower than this width.'),
+      '#states' => array(
+        'visible' => array(
+          ':input[name="block_settings[mobile_simple]"]' => array('checked' => TRUE),
+        ),
+      ),
+    );
+  }
+
   return $form;
 }
 
@@ -303,6 +330,10 @@ function pretty_calendar_block_save($delta = '', $edit = array()) {
   $config->set('link_type_' . $delta, $edit['link_type']);
   $config->set('event_count_' . $delta, $edit['event_count']);
   $config->set('separate_languages', $edit['separate_languages']);
+  if ($delta == 'pretty_calendar_full') {
+    $config->set('mobile_simple_' . $delta, !empty($edit['mobile_simple']) ? 1 : 0);
+    $config->set('mobile_breakpoint_' . $delta, (int) $edit['mobile_breakpoint'] ?: 640);
+  }
   $config->save();
 }
 
@@ -646,6 +677,15 @@ function pretty_calendar_block_content($month, $mode = 'simple', $delta = '') {
     $days = array();
   }
 
+  // Determine mobile breakpoint for the full calendar block.
+  $mobile_breakpoint = 0;
+  if ($mode == 'full' && !empty($delta)) {
+    $mobile_simple = $config->get('mobile_simple_' . $delta);
+    if ($mobile_simple || $mobile_simple === NULL) {
+      $mobile_breakpoint = (int) $config->get('mobile_breakpoint_' . $delta) ?: 640;
+    }
+  }
+
   return theme('pretty_calendar', array(
     'daynames' => $daynames,
     'daynames_class' => $daynames_class,
@@ -661,6 +701,8 @@ function pretty_calendar_block_content($month, $mode = 'simple', $delta = '') {
       'pretty-calendar--' . $mode,
       'pretty-calendar--' . $link_type,
     )),
+    'month' => $month,
+    'mobile_breakpoint' => $mobile_breakpoint,
   ));
 }
 

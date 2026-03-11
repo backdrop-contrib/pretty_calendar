@@ -20,7 +20,7 @@
  */
 ?>
 
-<div class="<?php print $calendar_classes; ?>" data-mode="<?php print $mode; ?>">
+<div class="<?php print $calendar_classes; ?>" data-mode="<?php print $mode; ?>"<?php if ($mobile_breakpoint): ?> data-month="<?php print (int) $month; ?>" data-mobile-breakpoint="<?php print (int) $mobile_breakpoint; ?>"<?php endif; ?>>
   <div class="pretty-calendar--container">
     <div class="pretty-calendar--month">
       <a href="#" rel="<?php print $month_prev; ?>" class="pretty-calendar--prev" aria-label="<?php print $month_prev_text; ?>">

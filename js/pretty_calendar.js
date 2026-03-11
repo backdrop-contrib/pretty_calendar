@@ -21,6 +21,29 @@
     },
   };
 
+  /**
+   * Switch full calendar to simple mode on narrow viewports.
+   */
+  Backdrop.behaviors.prettyCalendarMobile = {
+    attach: function (context, settings) {
+      $(context)
+        .find('.pretty-calendar--full[data-mobile-breakpoint]')
+        .once('prettyCalendarMobile')
+        .each(function () {
+          var $calendar = $(this);
+          var breakpoint = parseInt($calendar.data('mobile-breakpoint'), 10);
+          if (!breakpoint || window.innerWidth > breakpoint) {
+            return;
+          }
+          var month = $calendar.data('month');
+          $.get(Backdrop.settings.basePath + 'calendar_get/simple/' + month, function (data) {
+            $calendar.replaceWith(data);
+            Backdrop.attachBehaviors(document);
+          });
+        });
+    },
+  };
+
   Backdrop.prettyCalendar = {
     go: function (dir, $calendar) {
       const $gotodate = $calendar.find(".pretty-calendar--" + dir).attr("rel");
