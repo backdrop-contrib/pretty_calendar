@@ -13,6 +13,9 @@ function pretty_calendar_sample_content_install() {
   _pretty_calendar_sample_content_create_content_type();
   _pretty_calendar_sample_content_create_date_field();
   _pretty_calendar_sample_content_create_nodes();
+
+  $count = count(_pretty_calendar_sample_content_get_event_data());
+  backdrop_set_message(t('Pretty Calendar sample content installed: the <em>Event</em> content type and @count sample nodes have been created. To remove them, delete the nodes and content type manually.', array('@count' => $count)));
 }
 
 /**
