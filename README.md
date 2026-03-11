@@ -1,8 +1,11 @@
 # Pretty Calendar
 
-Produces a simple calendar block that displays content by date, as well as
-calendar detail pages to display all content for a particular date. The date
-can be selected from content creation time or from a custom date field.
+Produces a calendar block that displays content by date, with detail pages
+listing all content for a particular date. Includes both a compact sidebar
+calendar and a full monthly calendar view. The full calendar can automatically
+switch to the compact view on mobile devices, ensuring a clean experience at
+any screen size. The date can be selected from content creation time or from a
+custom date field.
 
 ## Installation
 
@@ -42,6 +45,46 @@ Settings can be found in the block configuration.
   
   - View and edit more instructions in the 
     [Wiki](https://github.com/backdrop-contrib/pretty_calendar/wiki).
+
+## Upgrading from 1.x-1.x to 1.x-2.x
+
+Version 2.x is a significant rewrite. Sites upgrading from 1.x-1.x should be
+aware of the following breaking changes and new features.
+
+**Breaking changes**
+
+- CSS classes have been renamed throughout. Any custom CSS or template
+  overrides targeting the old class names (e.g. `.calendar-day`) will need to
+  be updated to the new namespaced classes (e.g. `.pretty-calendar--day`).
+- The tooltip/popup system has been replaced with a new link type system (see
+  **Link type** in the Configuration section). The old "Tooltip type" block
+  setting no longer exists.
+
+**New features**
+
+- **Full calendar block**: A new "Pretty Calendar Full" block displays a
+  full-width monthly grid with event content embedded directly in each day cell,
+  powered by a bundled View.
+- **Two display modes**: The original block is now the "simple" mode (compact,
+  suitable for sidebars) and the new block is "full" mode (suitable for main
+  content areas).
+- **Mobile-responsive**: The full calendar block can automatically switch to
+  the simple compact view on narrow screens. The breakpoint is configurable per
+  block.
+- **Link type options**: Each block independently supports modal popup, link to
+  listing page, or direct node link. The modal popup now uses a Views-powered
+  listing for easier theming.
+- **Custom date field support**: Events can be ordered by a date field from the
+  Date module or the Repeating Dates module, in addition to node creation date.
+- **Sample content sub-module**: A bundled sub-module (`Pretty Calendar Sample
+  Content`) can create an Event content type and sample events to help
+  demonstrate the calendar during setup.
+- **Accessibility improvements**: Screen reader announcements on navigation,
+  `aria-haspopup` on modal links, and improved heading hierarchy.
+- **Minimal theme**: A new streamlined theme suited for modern sites, alongside
+  the retained legacy themes (Standard, Round, Gridy, Vista).
+- **Timezone fixes**: Corrected timezone offset handling in day and month
+  calculations.
 
 ## Issues
 
