@@ -13,41 +13,9 @@ function pretty_calendar_sample_content_install() {
   _pretty_calendar_sample_content_create_content_type();
   _pretty_calendar_sample_content_create_date_field();
   _pretty_calendar_sample_content_create_nodes();
-}
 
-/**
- * Implements hook_uninstall().
- */
-function pretty_calendar_sample_content_uninstall() {
-  // Delete all nodes of type 'event' created by this module.
-  $nids = db_select('node', 'n')
-    ->fields('n', array('nid'))
-    ->condition('n.type', 'event')
-    ->execute()
-    ->fetchCol();
-
-  if (!empty($nids)) {
-    node_delete_multiple($nids);
-  }
-
-  // Remove the date field instance from the event content type.
-  $instance = field_info_instance('node', 'field_event_date', 'event');
-  if ($instance) {
-    field_delete_instance($instance);
-  }
-
-  // Delete the field entirely if no other instances exist.
-  $field = field_info_field('field_event_date');
-  if ($field && empty($field['bundles'])) {
-    field_delete_field('field_event_date');
-  }
-
-  // Delete the content type.
-  $type = node_type_load('event');
-  if ($type) {
-    node_type_delete('event');
-    field_purge_batch(100);
-  }
+  $count = count(_pretty_calendar_sample_content_get_event_data());
+  backdrop_set_message(t('Pretty Calendar sample content installed: the <em>Event</em> content type and @count sample nodes have been created. To remove them, delete the nodes and content type manually.', array('@count' => $count)));
 }
 
 /**
