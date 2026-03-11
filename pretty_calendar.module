@@ -311,10 +311,15 @@ function pretty_calendar_block_save($delta = '', $edit = array()) {
     if ($field_date[0] == 'date') {
       $config->set('column_name_start', $field_date[1] . '_value');
       $config->set('column_name_end', $field_date[1] . '_value2');
+      // Save the field's storage type (date, datetime, or datestamp) so queries
+      // can use the correct SQL depending on how values are stored.
+      $field_info = field_info_field($field_date[1]);
+      $config->set('date_type', $field_info ? $field_info['type'] : 'datetime');
     }
     else if ($field_date[0] == 'repeating_dates') {
       $config->set('column_name_start', $field_date[1] . '_dtstart');
       $config->set('column_name_end', $field_date[1] . '_dtend');
+      $config->set('date_type', '');
     }
   }
   else {
@@ -323,6 +328,7 @@ function pretty_calendar_block_save($delta = '', $edit = array()) {
     $config->set('field_name', '');
     $config->set('column_name_start', '');
     $config->set('column_name_end', '');
+    $config->set('date_type', '');
   }
   $config->set('date_format_listing', $edit['date_format_listing']);
   $config->set('upcoming_days', (int) $edit['upcoming_days']);
@@ -592,7 +598,14 @@ function pretty_calendar_block_content($month, $mode = 'simple', $delta = '') {
   else {
     foreach ($nodes as $node) {
       if (isset($node->$column_name_start)) {
-        $node_day = (int) date('d', strtotime($node->$column_name_start) + $timezone_offset);
+        // datestamp fields store a Unix integer; all other date module types
+        // (datetime, date ISO) store a string that strtotime() can parse.
+        if ($config->get('date_type') == 'datestamp' || $config->get('date_module') == 'repeating_dates') {
+          $node_day = (int) date('d', (int) $node->$column_name_start + $timezone_offset);
+        }
+        else {
+          $node_day = (int) date('d', strtotime($node->$column_name_start) + $timezone_offset);
+        }
       }
       elseif (isset($node->created)) {
         $node_day = (int) date('d', $node->created + $timezone_offset);
@@ -868,7 +881,19 @@ function pretty_calendar_select_nodes($date = 0, $links_only = FALSE) {
       $select->distinct();
       $select->leftJoin('field_data_' . $field_name, 'fd', 'fd.entity_id = n.nid');
       $select->fields('fd', array($column_name_start));
-      $select->where('DATE(ADDTIME(' . $column_name_start . ', SEC_TO_TIME(' . $timezone_offset . '))) = :date', array(':date' => date('Y-m-d', $date)));
+      if ($config->get('date_module') == 'repeating_dates' || $config->get('date_type') == 'datestamp') {
+        // Unix integer storage — compare as a timestamp range for the day.
+        $select->condition('fd.' . $column_name_start, $date, '>=');
+        $select->condition('fd.' . $column_name_start, $date + 86400, '<');
+      }
+      elseif ($config->get('date_type') == 'date') {
+        // ISO format (YYYY-MM-DDTHH:MM:SS) — normalize the T before ADDTIME.
+        $select->where("DATE(ADDTIME(REPLACE(fd." . $column_name_start . ", 'T', ' '), SEC_TO_TIME(" . $timezone_offset . "))) = :date", array(':date' => date('Y-m-d', $date)));
+      }
+      else {
+        // datetime format (YYYY-MM-DD HH:MM:SS).
+        $select->where('DATE(ADDTIME(fd.' . $column_name_start . ', SEC_TO_TIME(' . $timezone_offset . '))) = :date', array(':date' => date('Y-m-d', $date)));
+      }
     }
   }
   // Check types.
@@ -939,7 +964,19 @@ function pretty_calendar_select_month_nodes($date = 0) {
       $select->distinct();
       $select->leftJoin('field_data_' . $field_name, 'fd', 'fd.entity_id = n.nid');
       $select->fields('fd', array($column_name_start));
-      $select->where('DATE_FORMAT(ADDTIME(fd.' . $column_name_start . ', SEC_TO_TIME(' . $timezone_offset . ')), \'%Y%m\') = :stamp', array(':stamp' => date('Ym', $date)));
+      if ($config->get('date_type') == 'datestamp') {
+        // Unix integer storage — compare as a timestamp range for the month.
+        $select->condition('fd.' . $column_name_start, mktime(0, 0, 0, date('m', $date + $timezone_offset), 1, date('Y', $date)), '>=');
+        $select->condition('fd.' . $column_name_start, mktime(0, 0, 0, date('m', $date + $timezone_offset) + 1, 1, date('Y', $date)), '<');
+      }
+      elseif ($config->get('date_type') == 'date') {
+        // ISO format (YYYY-MM-DDTHH:MM:SS) — normalize the T before ADDTIME.
+        $select->where("DATE_FORMAT(ADDTIME(REPLACE(fd." . $column_name_start . ", 'T', ' '), SEC_TO_TIME(" . $timezone_offset . ")), '%Y%m') = :stamp", array(':stamp' => date('Ym', $date)));
+      }
+      else {
+        // datetime format (YYYY-MM-DD HH:MM:SS).
+        $select->where('DATE_FORMAT(ADDTIME(fd.' . $column_name_start . ', SEC_TO_TIME(' . $timezone_offset . ')), \'%Y%m\') = :stamp', array(':stamp' => date('Ym', $date)));
+      }
     }
     else if ($config->get('date_module') == 'repeating_dates') {
       $select->distinct();
