@@ -14,5 +14,7 @@
     "title_words": "event, events",
     "link_type": "popup",
     "event_count": 5,
-    "separate_languages": 0
+    "separate_languages": 0,
+    "mobile_simple_pretty_calendar_full": 1,
+    "mobile_breakpoint_pretty_calendar_full": 640
 }
