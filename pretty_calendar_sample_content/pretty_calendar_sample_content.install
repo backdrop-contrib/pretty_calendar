@@ -1,0 +1,659 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the Pretty Calendar Sample
+ * Content module.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function pretty_calendar_sample_content_install() {
+  _pretty_calendar_sample_content_create_content_type();
+  _pretty_calendar_sample_content_create_date_field();
+  _pretty_calendar_sample_content_create_nodes();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function pretty_calendar_sample_content_uninstall() {
+  // Delete all nodes of type 'event' created by this module.
+  $nids = db_select('node', 'n')
+    ->fields('n', array('nid'))
+    ->condition('n.type', 'event')
+    ->execute()
+    ->fetchCol();
+
+  if (!empty($nids)) {
+    node_delete_multiple($nids);
+  }
+
+  // Remove the date field instance from the event content type.
+  $instance = field_info_instance('node', 'field_event_date', 'event');
+  if ($instance) {
+    field_delete_instance($instance);
+  }
+
+  // Delete the field entirely if no other instances exist.
+  $field = field_info_field('field_event_date');
+  if ($field && empty($field['bundles'])) {
+    field_delete_field('field_event_date');
+  }
+
+  // Delete the content type.
+  $type = node_type_load('event');
+  if ($type) {
+    node_type_delete('event');
+    field_purge_batch(100);
+  }
+}
+
+/**
+ * Creates the Event content type.
+ */
+function _pretty_calendar_sample_content_create_content_type() {
+  // Do not recreate if it already exists.
+  if (node_type_load('event')) {
+    return;
+  }
+
+  $type = array(
+    'type' => 'event',
+    'name' => t('Event'),
+    'base' => 'node_content',
+    'description' => t('Use events to announce gatherings, workshops, celebrations, and other activities.'),
+    'custom' => TRUE,
+    'modified' => TRUE,
+    'locked' => FALSE,
+    'settings' => array(
+      'promote_enabled' => FALSE,
+    ),
+  );
+
+  $type = node_type_set_defaults($type);
+  node_type_save($type);
+
+  // Add default body field.
+  node_add_body_field($type, t('Description'));
+}
+
+/**
+ * Creates the date field and attaches it to the Event content type.
+ */
+function _pretty_calendar_sample_content_create_date_field() {
+  // Create the field if it does not exist.
+  if (!field_info_field('field_event_date')) {
+    $field = array(
+      'field_name' => 'field_event_date',
+      'type' => 'datetime',
+      'module' => 'date',
+      'cardinality' => 1,
+      'settings' => array(
+        'granularity' => array(
+          'year' => 'year',
+          'month' => 'month',
+          'day' => 'day',
+          'hour' => 'hour',
+          'minute' => 'minute',
+          'second' => 0,
+        ),
+        'tz_handling' => 'site',
+        'timezone_db' => 'UTC',
+        'todate' => '',
+        'cache_enabled' => 0,
+        'cache_count' => 4,
+      ),
+    );
+    field_create_field($field);
+  }
+
+  // Attach the field to the event content type if not already attached.
+  if (!field_info_instance('node', 'field_event_date', 'event')) {
+    $instance = array(
+      'field_name' => 'field_event_date',
+      'entity_type' => 'node',
+      'bundle' => 'event',
+      'label' => t('Event Date'),
+      'description' => t('The date and time when the event takes place.'),
+      'required' => TRUE,
+      'settings' => array(
+        'default_value' => 'now',
+        'default_value2' => 'same',
+      ),
+      'widget' => array(
+        'type' => 'date_popup',
+        'weight' => 1,
+        'settings' => array(
+          'input_format' => 'm/d/Y - H:i',
+          'input_format_custom' => '',
+          'increment' => 15,
+          'text_parts' => array(),
+          'year_range' => '-1:+3',
+        ),
+      ),
+      'display' => array(
+        'default' => array(
+          'label' => 'above',
+          'type' => 'date_default',
+          'settings' => array(
+            'format_type' => 'long',
+            'fromto' => 'both',
+            'multiple_number' => '',
+            'multiple_from' => '',
+            'multiple_to' => '',
+          ),
+          'weight' => 0,
+        ),
+        'teaser' => array(
+          'label' => 'above',
+          'type' => 'date_default',
+          'settings' => array(
+            'format_type' => 'medium',
+            'fromto' => 'both',
+            'multiple_number' => '',
+            'multiple_from' => '',
+            'multiple_to' => '',
+          ),
+          'weight' => 0,
+        ),
+      ),
+    );
+    field_create_instance($instance);
+  }
+}
+
+/**
+ * Creates sample event nodes spread across 12 months.
+ *
+ * Several dates intentionally have multiple events to demonstrate the
+ * calendar's ability to display and link to days with more than one event.
+ */
+function _pretty_calendar_sample_content_create_nodes() {
+  $events = _pretty_calendar_sample_content_get_event_data();
+
+  foreach ($events as $event) {
+    $node = new Node(array(
+      'type' => 'event',
+      'title' => $event['title'],
+      'uid' => 1,
+      'status' => NODE_PUBLISHED,
+      'language' => LANGUAGE_NONE,
+    ));
+
+    // Set the body field.
+    $node->body[LANGUAGE_NONE][0] = array(
+      'value' => $event['body'],
+      'summary' => $event['summary'],
+      'format' => 'filtered_html',
+    );
+
+    // Set the event date field. Datetime fields store as 'YYYY-MM-DD HH:MM:SS'.
+    $node->field_event_date[LANGUAGE_NONE][0] = array(
+      'value' => $event['date'] . ' ' . $event['time'] . ':00',
+      'timezone' => 'America/Chicago',
+      'timezone_db' => 'UTC',
+      'date_type' => 'datetime',
+    );
+
+    node_save($node);
+  }
+}
+
+/**
+ * Returns an array of event data for the sample events.
+ *
+ * Covers March 2026 through February 2027. Roughly half the dates have a
+ * single event and half have two events, to demonstrate the calendar's
+ * multi-event display.
+ *
+ * Single-event dates (16):
+ *   Mar 9, Mar 25, May 3, May 14, May 28, Jul 4, Jul 12, Jul 26,
+ *   Sep 6, Sep 15, Sep 29, Nov 3, Nov 14, Nov 28, Dec 19, Jan 30.
+ *
+ * Two-event dates (15):
+ *   Mar 15, Apr 5, Apr 20, Jun 8, Jun 22, Aug 10, Aug 24,
+ *   Oct 11, Oct 25, Dec 6, Dec 31, Jan 8, Jan 20, Feb 7, Feb 21.
+ *
+ * @return array
+ *   An array of event data arrays, each containing title, date, time,
+ *   summary, and body keys.
+ */
+function _pretty_calendar_sample_content_get_event_data() {
+  return array(
+
+    // -----------------------------------------------------------------------
+    // March 2026
+    // -----------------------------------------------------------------------
+
+    // Mar 9 — single event.
+    array(
+      'title' => 'Annual Community Planning Workshop',
+      'date' => '2026-03-09',
+      'time' => '09:00',
+      'summary' => 'Join community leaders and residents to shape our shared vision for the coming year.',
+      'body' => '<p>Join community leaders, stakeholders, and residents for our Annual Community Planning Workshop. This full-day event brings together voices from across the neighborhood to set priorities, review the previous year\'s progress, and chart a course for the months ahead. Breakfast and lunch will be provided. Small group sessions will focus on housing, green spaces, local business, and youth programming. All are welcome.</p>',
+    ),
+
+    // Mar 15 — two events.
+    array(
+      'title' => 'Spring Fundraising Gala',
+      'date' => '2026-03-15',
+      'time' => '18:30',
+      'summary' => 'An elegant evening of dining, live music, and fundraising to support local programs.',
+      'body' => '<p>Dress your best and join us for our annual Spring Fundraising Gala at the Riverside Ballroom. The evening features a three-course dinner, a live jazz quartet, a silent auction with locally donated items, and remarks from our community partners. Proceeds fund youth scholarships, senior outreach, and neighborhood beautification projects. Tickets are available at the door or in advance online.</p>',
+    ),
+    array(
+      'title' => 'Neighborhood Safety Workshop',
+      'date' => '2026-03-15',
+      'time' => '10:00',
+      'summary' => 'Learn practical safety tips and meet your local emergency responders.',
+      'body' => '<p>The Neighborhood Safety Workshop brings together local police, fire, and emergency medical staff to share practical safety information with residents. Topics include home fire safety, personal security, emergency preparedness kits, and how to use the city\'s emergency alert system. Interactive demonstrations and Q&A included. Free to attend; no registration required. Refreshments provided.</p>',
+    ),
+
+    // Mar 25 — single event.
+    array(
+      'title' => 'Environmental Cleanup Day',
+      'date' => '2026-03-25',
+      'time' => '08:00',
+      'summary' => 'Volunteers gather to clean up parks, trails, and public spaces across the city.',
+      'body' => '<p>Roll up your sleeves and help restore our green spaces! Volunteers of all ages are invited to participate in our city-wide Environmental Cleanup Day. Teams will be assigned to parks, trail sections, creek beds, and roadside areas. Gloves, bags, and safety vests will be provided. After the cleanup, join us for a free barbecue lunch in Riverside Park. Pre-registration is encouraged but walk-ins are welcome.</p>',
+    ),
+
+    // -----------------------------------------------------------------------
+    // April 2026
+    // -----------------------------------------------------------------------
+
+    // Apr 5 — two events.
+    array(
+      'title' => 'Board of Directors Quarterly Meeting',
+      'date' => '2026-04-05',
+      'time' => '10:00',
+      'summary' => 'Open quarterly meeting of the community association board.',
+      'body' => '<p>The Community Association Board of Directors holds its quarterly public meeting at the Civic Center. Community members are invited to observe and participate in the public comment period. The agenda includes financial reports, committee updates, and discussion of upcoming capital projects. Meeting minutes will be posted on the community website within five business days.</p>',
+    ),
+    array(
+      'title' => 'Community Spring Photography Walk',
+      'date' => '2026-04-05',
+      'time' => '14:00',
+      'summary' => 'A guided walk through the neighborhood to capture the beauty of spring with your camera.',
+      'body' => '<p>Whether you shoot with a phone or a DSLR, everyone is welcome at the Community Spring Photography Walk. A local photographer leads a leisurely two-hour stroll through Riverside Park and the historic district, offering tips on composition, natural light, and storytelling through images. Participants are encouraged to share their favorite shots on the community gallery board at the library afterward. Free to join; all skill levels welcome.</p>',
+    ),
+
+    // Apr 20 — two events.
+    array(
+      'title' => 'Youth Leadership Conference',
+      'date' => '2026-04-20',
+      'time' => '08:30',
+      'summary' => 'A one-day conference empowering high school students with leadership skills and civic knowledge.',
+      'body' => '<p>High school students from across the region are invited to the annual Youth Leadership Conference. Workshops cover public speaking, community organizing, civic engagement, and career pathways in public service. Keynote speakers include elected officials, nonprofit directors, and recent graduates making a difference. Lunch is included. Students may earn community service hours for attending. Space is limited — register early.</p>',
+    ),
+    array(
+      'title' => 'Earth Day Community Mural Unveiling',
+      'date' => '2026-04-20',
+      'time' => '14:00',
+      'summary' => 'Celebrate Earth Day with the unveiling of a new community mural painted by local youth artists.',
+      'body' => '<p>This Earth Day, join us for the unveiling of a stunning new mural painted over the past month by young artists from the Community Arts Program. The mural — spanning the east wall of the Riverside Community Center — depicts local flora, fauna, and waterways. Remarks from the young artists, a short reception, and a guided walk of the mural are included. Free to attend. All are welcome to celebrate these talented community members.</p>',
+    ),
+
+    // -----------------------------------------------------------------------
+    // May 2026
+    // -----------------------------------------------------------------------
+
+    // May 3 — single event.
+    array(
+      'title' => "Mother's Day Brunch & Bazaar",
+      'date' => '2026-05-03',
+      'time' => '10:00',
+      'summary' => 'Celebrate the mothers in your life with brunch, live music, and a local artisan market.',
+      'body' => '<p>Celebrate the special people in your life at our annual Mother\'s Day Brunch & Bazaar. Enjoy a catered brunch buffet while browsing tables from local artisans selling handmade jewelry, candles, plants, baked goods, and more. Live acoustic music plays throughout the morning. Free admission to the bazaar; brunch tickets available for purchase. A wonderful way to spend a Sunday morning with the people you love.</p>',
+    ),
+
+    // May 14 — single event.
+    array(
+      'title' => 'Downtown Art Walk',
+      'date' => '2026-05-14',
+      'time' => '17:00',
+      'summary' => 'A self-guided evening tour of galleries, studios, and pop-up art installations downtown.',
+      'body' => '<p>Every May, downtown comes alive for the Art Walk — a free, self-guided evening tour of participating galleries, studios, shops, and pop-up installations. Pick up a map at any participating venue and explore at your own pace from 5 to 9 PM. Many artists will be on hand to talk about their work. Restaurants along the route offer Art Walk specials. A great night out for families, art lovers, and curious minds alike.</p>',
+    ),
+
+    // May 28 — single event.
+    array(
+      'title' => 'Memorial Day Parade & Ceremony',
+      'date' => '2026-05-28',
+      'time' => '10:00',
+      'summary' => 'Honor those who served with a community parade and remembrance ceremony at Veterans Park.',
+      'body' => '<p>Join your neighbors in honoring the men and women who gave their lives in service to our country. The parade steps off at 10 AM from the high school and proceeds down Main Street to Veterans Park, where a brief ceremony will include remarks from local officials, a moment of silence, a wreath laying, and a musical salute by the community band. All veterans and active-duty service members are invited to march. Free and open to all.</p>',
+    ),
+
+    // -----------------------------------------------------------------------
+    // June 2026
+    // -----------------------------------------------------------------------
+
+    // Jun 8 — two events.
+    array(
+      'title' => 'Summer Concert Series Kickoff',
+      'date' => '2026-06-08',
+      'time' => '19:00',
+      'summary' => 'Kick off summer with the first free outdoor concert of the season at Riverside Park.',
+      'body' => '<p>Summer is officially here! Join us for the kickoff of our beloved free Summer Concert Series at the Riverside Park amphitheater. This year\'s opening night features the regional fan-favorite band Copper & Oak, playing an eclectic mix of Americana, blues, and folk. Bring your lawn chairs and blankets. Food trucks will be on site from 6 PM. Concerts continue every other Friday through August. All concerts are free and family-friendly.</p>',
+    ),
+    array(
+      'title' => 'Food Truck Festival',
+      'date' => '2026-06-08',
+      'time' => '11:00',
+      'summary' => 'Over a dozen local food trucks gather for a day of street food, live music, and community fun.',
+      'body' => '<p>Hungry for something new? The Food Truck Festival brings together more than a dozen of the region\'s most popular mobile kitchens for a day of incredible eats. From tacos and barbecue to vegan bowls and gourmet grilled cheese, there is something for every palate. Live music plays throughout the day, and a kids\' activity area keeps the whole family entertained. Free admission. Cash and cards accepted at most trucks.</p>',
+    ),
+
+    // Jun 22 — two events.
+    array(
+      'title' => 'Community Garden Planting Day',
+      'date' => '2026-06-22',
+      'time' => '09:00',
+      'summary' => 'Help plant the community garden and learn about urban food growing.',
+      'body' => '<p>Get your hands in the soil at our annual Community Garden Planting Day. Volunteers help prepare beds, transplant seedlings, and set up trellises at the Eastside Community Garden. Master Gardeners will be on hand to answer questions and lead short workshops on companion planting, composting, and water-wise gardening. Families with children are especially welcome. Garden gloves and tools provided. Dress to get dirty!</p>',
+    ),
+    array(
+      'title' => 'Summer Reading Program Launch',
+      'date' => '2026-06-22',
+      'time' => '13:00',
+      'summary' => 'Sign up for the library\'s summer reading challenge and kick off the season with a party.',
+      'body' => '<p>Head to the public library for the launch of the Summer Reading Program! Children, teens, and adults are all invited to sign up for the reading challenge. The kickoff party features storytelling, crafts, a scavenger hunt, and a performance by a local puppeteer. Participants who complete the challenge by August 15th earn prizes and are entered into a grand prize drawing. Free library card sign-ups on site. All ages welcome.</p>',
+    ),
+
+    // -----------------------------------------------------------------------
+    // July 2026
+    // -----------------------------------------------------------------------
+
+    // Jul 4 — single event.
+    array(
+      'title' => 'Independence Day Celebration',
+      'date' => '2026-07-04',
+      'time' => '11:00',
+      'summary' => 'A full day of family fun culminating in a spectacular fireworks display at dusk.',
+      'body' => '<p>Celebrate the Fourth of July with your community! The day begins with a flag ceremony and patriotic program at 11 AM in Central Park. Enjoy carnival games, live music, food vendors, and a pie-eating contest throughout the afternoon. As dusk falls, spread out your blankets for the fireworks display — one of the best in the region. Parking is available at the fairgrounds with free shuttle service to the park. A beloved tradition for all ages.</p>',
+    ),
+
+    // Jul 12 — single event.
+    array(
+      'title' => "Farmers Market Expansion Launch",
+      'date' => '2026-07-12',
+      'time' => '08:00',
+      'summary' => 'Celebrate the expansion of our weekly farmers market with new vendors and Saturday hours.',
+      'body' => '<p>The Downtown Farmers Market is growing! Join us for the official launch of expanded Saturday hours and a new vendor section featuring prepared foods, local meats, dairy, and specialty crops. The ribbon-cutting ceremony begins at 8 AM. The first 200 shoppers receive a reusable market tote. Live music by the Greenfield String Quartet plays from 9 to 11 AM. Market hours extend this season to 8 AM – 1 PM every Saturday through October.</p>',
+    ),
+
+    // Jul 26 — single event.
+    array(
+      'title' => 'Outdoor Movie Night',
+      'date' => '2026-07-26',
+      'time' => '20:30',
+      'summary' => 'Free family movie screening under the stars in Central Park.',
+      'body' => '<p>Pack your blankets and lawn chairs for a free outdoor movie night in Central Park. This month\'s feature is a beloved family classic — details announced one week prior on the events page. Gates open at 8 PM; the film begins at sundown (approximately 8:30 PM). Popcorn and drinks available for purchase. Concessions benefit the Friends of the Park nonprofit. Rain cancels — check the website day-of. No pets please.</p>',
+    ),
+
+    // -----------------------------------------------------------------------
+    // August 2026
+    // -----------------------------------------------------------------------
+
+    // Aug 10 — two events.
+    array(
+      'title' => 'Back-to-School Supply Drive',
+      'date' => '2026-08-10',
+      'time' => '10:00',
+      'summary' => 'Drop off school supplies for students in need and pick up free resources for families.',
+      'body' => '<p>Help local students start the school year strong! Our annual Back-to-School Supply Drive collects new backpacks, notebooks, pencils, crayons, glue sticks, and other essentials for students from low-income households. Drop-off stations open at 10 AM at the Community Center. Families in need can also pick up a pre-packed supply kit (first come, first served while supplies last). Monetary donations accepted and used to purchase additional materials. Volunteer helpers welcome.</p>',
+    ),
+    array(
+      'title' => 'School Year Kickoff Pep Rally',
+      'date' => '2026-08-10',
+      'time' => '17:00',
+      'summary' => 'Get students excited for the new school year with music, games, and giveaways.',
+      'body' => '<p>Send students back to school energized and ready to learn! The School Year Kickoff Pep Rally at the high school stadium features live music from student performers, motivational speakers, team-building games, and giveaways for students including school supplies and spirit gear. All students K–12 and their families are invited. Free to attend. Hosted by the Community Education Foundation in partnership with the school district.</p>',
+    ),
+
+    // Aug 24 — two events.
+    array(
+      'title' => 'Community Health Fair',
+      'date' => '2026-08-24',
+      'time' => '09:00',
+      'summary' => 'Free health screenings, wellness information, and resources from local healthcare providers.',
+      'body' => '<p>Take charge of your health at our annual Community Health Fair. Local healthcare providers, nonprofits, and wellness organizations offer free blood pressure checks, cholesterol screenings, vision and hearing tests, dental consultations, and mental health resources. Information tables cover nutrition, fitness, chronic disease management, and insurance enrollment. Activities for children include a health-themed scavenger hunt. All services are free and no appointment is needed.</p>',
+    ),
+    array(
+      'title' => 'Youth Sports Registration Day',
+      'date' => '2026-08-24',
+      'time' => '10:00',
+      'summary' => 'Sign up kids and teens for fall youth sports leagues at the Recreation Center.',
+      'body' => '<p>Fall sports are almost here! Stop by the Recreation Center to register children and teens for fall soccer, flag football, volleyball, and cross-country running leagues. Registration staff will be available to answer questions about schedules, fees, and scholarship assistance. Equipment swap table on site — bring gently used gear to trade. Coaches and team captains also available to meet prospective players. Walk-ins welcome; online registration also available.</p>',
+    ),
+
+    // -----------------------------------------------------------------------
+    // September 2026
+    // -----------------------------------------------------------------------
+
+    // Sep 6 — single event.
+    array(
+      'title' => 'Labor Day Block Party',
+      'date' => '2026-09-06',
+      'time' => '12:00',
+      'summary' => 'Celebrate the holiday with neighbors at our annual Labor Day block party.',
+      'body' => '<p>Close out summer the right way — with neighbors, good food, and great fun! The annual Labor Day Block Party closes Elm Street from Oak to Maple for an afternoon of community celebration. Enjoy a community barbecue, lawn games, a bounce house for kids, live music, and a neighborhood raffle. Bring a dish to share for the potluck table and enjoy a day of relaxed connection. Free admission. Rain date: September 7th.</p>',
+    ),
+
+    // Sep 15 — single event.
+    array(
+      'title' => 'Fall Arts & Crafts Festival',
+      'date' => '2026-09-15',
+      'time' => '10:00',
+      'summary' => 'Over 80 local artisans selling handcrafted goods at Riverside Park.',
+      'body' => '<p>Autumn arrives with color and creativity at the Fall Arts & Crafts Festival. More than 80 local and regional artisans set up at Riverside Park to showcase handcrafted ceramics, fiber arts, woodwork, paintings, jewelry, photography, and more. Admission is free. Live folk and bluegrass music plays throughout both days. A children\'s craft tent offers drop-in activities. Food vendors and a local brewery will be on site. This is a juried show — quality work is guaranteed.</p>',
+    ),
+
+    // Sep 29 — single event.
+    array(
+      'title' => 'Neighborhood Beautification Day',
+      'date' => '2026-09-29',
+      'time' => '08:30',
+      'summary' => 'Volunteer crews plant trees, install planters, and refresh public spaces across the neighborhood.',
+      'body' => '<p>Help us prepare our neighborhood for the season ahead. Volunteer crews will plant native trees along the new greenway corridor, install decorative planters in the downtown core, paint crosswalk murals, and refresh landscaping at three public parks. No experience necessary — just bring enthusiasm and comfortable clothes. Tools and materials are provided. Coffee and donuts served at check-in. Volunteer hours certified for students. Ends by noon with a free lunch for participants.</p>',
+    ),
+
+    // -----------------------------------------------------------------------
+    // October 2026
+    // -----------------------------------------------------------------------
+
+    // Oct 11 — two events.
+    array(
+      'title' => 'Harvest Festival & Pumpkin Patch',
+      'date' => '2026-10-11',
+      'time' => '10:00',
+      'summary' => 'A beloved fall tradition with a pumpkin patch, hayrides, cider, and autumn activities.',
+      'body' => '<p>It\'s the most anticipated fall event of the year! The Harvest Festival fills Greenbrook Farm with the sights, smells, and flavors of autumn. Pick your own pumpkin from the patch, take a hayride through the fields, enjoy fresh-pressed apple cider and hot donuts, and let the kids loose in the corn maze. Live bluegrass music plays all day. Face painting, scarecrow-making, and a pie contest round out the fun. Free admission; pumpkins and activities priced individually.</p>',
+    ),
+    array(
+      'title' => 'Farmers Market Last Day of the Season',
+      'date' => '2026-10-11',
+      'time' => '08:00',
+      'summary' => 'Celebrate the final Saturday market of the season with special vendors and live music.',
+      'body' => '<p>All good things must come to a seasonal end! Join us for the last Downtown Farmers Market of the year. Vendors will feature special end-of-season offerings including late harvest produce, preserves, baked goods, and winter squash. The community choir performs at 10 AM. The first 100 shoppers receive a complimentary bag of locally grown apples. A wonderful morning to stock up on local goods before the market returns next spring.</p>',
+    ),
+
+    // Oct 25 — two events.
+    array(
+      'title' => 'Halloween Parade & Costume Contest',
+      'date' => '2026-10-25',
+      'time' => '14:00',
+      'summary' => 'Costumes, candy, and community fun at the annual Halloween parade downtown.',
+      'body' => '<p>Ghosts, goblins, superheroes, and creative characters of all kinds are welcome at the annual Halloween Parade! The parade steps off at 2 PM from the library parking lot and winds through downtown. After the parade, join the costume contest in the town square — categories for all ages from toddlers to seniors. Prizes awarded for scariest, most creative, best group costume, and more. Candy provided for all kids. A safe, community-centered alternative to trick-or-treating. Free to attend.</p>',
+    ),
+    array(
+      'title' => 'Trunk or Treat',
+      'date' => '2026-10-25',
+      'time' => '17:00',
+      'summary' => 'A safe and festive trick-or-treating event in the Community Center parking lot.',
+      'body' => '<p>Following the Halloween Parade, bring the kids to the Trunk or Treat in the Community Center parking lot! Decorated car trunks and creative displays provide a safe, well-lit trick-or-treating experience for children of all ages. Participating families are encouraged to decorate their vehicles and bring wrapped candy. Hot apple cider and cocoa provided for families. Costume contest for the best decorated trunk. A fun cap to a great Halloween day.</p>',
+    ),
+
+    // -----------------------------------------------------------------------
+    // November 2026
+    // -----------------------------------------------------------------------
+
+    // Nov 3 — single event.
+    array(
+      'title' => 'Volunteer Appreciation Lunch',
+      'date' => '2026-11-03',
+      'time' => '12:00',
+      'summary' => 'Honoring the dedicated volunteers who power our community programs year-round.',
+      'body' => '<p>Our community runs on the generosity of its volunteers, and this lunch is our way of saying thank you. All current and past volunteers are invited to the annual Volunteer Appreciation Lunch at the Community Center. Enjoy a catered meal, hear stories from the year, and celebrate outstanding volunteers recognized with special awards. New volunteer opportunities for the coming year will also be introduced. RSVP required so we can prepare enough food for everyone.</p>',
+    ),
+
+    // Nov 14 — single event.
+    array(
+      'title' => 'Annual Awards Gala',
+      'date' => '2026-11-14',
+      'time' => '18:00',
+      'summary' => 'Celebrating outstanding community members, businesses, and organizations at our annual gala.',
+      'body' => '<p>Join us for a formal evening celebrating the people and organizations that make our community extraordinary. The Annual Awards Gala features a plated dinner, live entertainment, and the presentation of awards in categories including Neighbor of the Year, Outstanding Youth Leader, Local Business of the Year, and Nonprofit Impact Award. Nominees are selected by a community panel. Tickets available online and at the Chamber of Commerce office. Black tie optional.</p>',
+    ),
+
+    // Nov 28 — single event.
+    array(
+      'title' => 'Community Thanksgiving Dinner',
+      'date' => '2026-11-28',
+      'time' => '13:00',
+      'summary' => 'A free Thanksgiving dinner open to all — no one eats alone in our community.',
+      'body' => '<p>No one should spend Thanksgiving alone. The Community Thanksgiving Dinner at the Civic Center offers a free, traditional holiday meal to all who come — whether you\'re a longtime resident, new to town, living alone, or just looking for a place to celebrate with others. Volunteers serve turkey, stuffing, sweet potatoes, green beans, cranberry sauce, and pies. Carry-out meals available for those who cannot attend in person. Volunteers to help serve are also needed — sign up on our website.</p>',
+    ),
+
+    // -----------------------------------------------------------------------
+    // December 2026
+    // -----------------------------------------------------------------------
+
+    // Dec 6 — two events.
+    array(
+      'title' => 'Holiday Toy Drive Kickoff',
+      'date' => '2026-12-06',
+      'time' => '10:00',
+      'summary' => 'Help brighten the holidays for children in need by donating a new, unwrapped toy.',
+      'body' => '<p>The season of giving begins! Drop off new, unwrapped toys at the Holiday Toy Drive Kickoff at the Community Center. All toys collected go directly to children served by local family assistance programs. Suggested items include age-labeled toys for newborns through age 15. Monetary donations accepted and used to purchase specific high-need items. Hot cocoa and holiday cookies provided for all donors. Toy collection continues through December 20th at multiple drop-off locations across town.</p>',
+    ),
+    array(
+      'title' => 'Holiday Tree Lighting Ceremony',
+      'date' => '2026-12-06',
+      'time' => '17:00',
+      'summary' => 'Gather downtown for the annual holiday tree lighting, caroling, and hot drinks.',
+      'body' => '<p>Kick off the holiday season at the annual Holiday Tree Lighting in the town square! Local choirs perform caroling favorites from 5 PM, followed by remarks from the mayor and the ceremonial lighting of the community tree at 5:30 PM. Warm up with complimentary hot cocoa and cider provided by local businesses. Photos with the decorated tree encouraged. A magical evening for families, friends, and neighbors to start the season together.</p>',
+    ),
+
+    // Dec 19 — single event.
+    array(
+      'title' => 'Winter Solstice Lantern Walk',
+      'date' => '2026-12-19',
+      'time' => '17:30',
+      'summary' => 'A magical lantern-lit walk through the park to celebrate the longest night of the year.',
+      'body' => '<p>Mark the darkest day of the year with light, community, and a touch of magic. The Winter Solstice Lantern Walk winds through Riverside Park as participants carry handcrafted lanterns along a candlelit path. Lantern-making workshops are held beforehand (2–4 PM; materials provided). The walk begins at 5:30 PM and ends at the pavilion with mulled cider, caroling, and a community bonfire. A reflective, joyful tradition for all ages. Free to attend; suggested $5 donation for the lantern workshop.</p>',
+    ),
+
+    // Dec 31 — two events.
+    array(
+      'title' => "New Year's Eve Community Countdown",
+      'date' => '2026-12-31',
+      'time' => '21:00',
+      'summary' => 'Ring in the new year together with a midnight countdown, live music, and fireworks.',
+      'body' => '<p>Join your community for a safe and festive New Year\'s Eve Countdown in Central Park! Live music from local bands plays from 9 PM, with food vendors, a photo booth, and family activities running throughout the evening. A family-friendly countdown at 10 PM is followed by the midnight celebration with a ball drop, fireworks, and champagne toast for adults. All ages welcome. Free admission. Dress warmly — the party goes on rain, snow, or shine!</p>',
+    ),
+    array(
+      'title' => 'First Night Gallery Walk',
+      'date' => '2026-12-31',
+      'time' => '17:00',
+      'summary' => 'Ring out the year with an evening stroll through downtown galleries and art spaces.',
+      'body' => '<p>Before the midnight festivities, spend New Year\'s Eve exploring the arts. First Night Gallery Walk opens participating downtown galleries, studios, and art spaces from 5 to 9 PM for a free self-guided evening of art, live performance, and community. Many venues will host special year-in-review exhibitions and live music by local musicians. Pick up a map at any participating location. A civilized and beautiful way to close out the year before the countdown begins.</p>',
+    ),
+
+    // -----------------------------------------------------------------------
+    // January 2027
+    // -----------------------------------------------------------------------
+
+    // Jan 8 — two events.
+    array(
+      'title' => 'New Year Community Vision Session',
+      'date' => '2027-01-08',
+      'time' => '18:00',
+      'summary' => 'Share your hopes and ideas for the new year at this open community visioning session.',
+      'body' => '<p>A new year brings new possibilities. Join your neighbors for an informal evening of conversation and collective visioning. What would you love to see happen in our community this year? What challenges do we need to tackle together? Facilitated by community leaders, this open session gathers ideas that help shape our programming, advocacy, and priorities. All perspectives are welcome. Light refreshments provided. Child care available upon request (RSVP required for child care).</p>',
+    ),
+    array(
+      'title' => 'Winter Wellness Workshop',
+      'date' => '2027-01-08',
+      'time' => '10:00',
+      'summary' => 'Beat the winter blues with practical strategies for physical and mental wellness.',
+      'body' => '<p>January can be a challenging month for body and mind. The Winter Wellness Workshop brings together local health professionals to share accessible, evidence-based strategies for staying well through the cold months. Sessions cover sleep hygiene, winter nutrition, indoor movement routines, social connection, and managing seasonal mood changes. Handouts, a resource list, and a light healthy snack provided. Free to attend; registration appreciated so we can plan seating.</p>',
+    ),
+
+    // Jan 20 — two events.
+    array(
+      'title' => 'Martin Luther King Jr. Day of Service',
+      'date' => '2027-01-20',
+      'time' => '09:00',
+      'summary' => 'Honor Dr. King\'s legacy with a day of community service projects across the city.',
+      'body' => '<p>On this national day of remembrance and service, our community comes together to honor Dr. Martin Luther King Jr.\'s legacy through action. Volunteer teams work on projects throughout the day including housing repair assistance for elderly residents, food pantry restocking, mural painting at a community center, and literacy tutoring at the public library. All skill levels welcome. Breakfast provided at check-in. Service hours certified. Register online to select your preferred project site.</p>',
+    ),
+    array(
+      'title' => 'Civil Rights Photography Exhibition Opening',
+      'date' => '2027-01-20',
+      'time' => '14:00',
+      'summary' => 'Opening reception for a new photography exhibition documenting the local civil rights movement.',
+      'body' => '<p>The Riverside Public Library opens a new photography exhibition tracing the history of the civil rights movement in our own community. Drawn from local archives, private collections, and historical society holdings, the images document marches, organizing meetings, sit-ins, and the everyday lives of those who fought for equality here. A brief opening program includes remarks from local historians and community elders with firsthand memories. The exhibition runs through March. Free admission.</p>',
+    ),
+
+    // Jan 30 — single event.
+    array(
+      'title' => 'Winter Festival & Ice Sculpture Contest',
+      'date' => '2027-01-30',
+      'time' => '11:00',
+      'summary' => 'Watch professional ice sculptors at work and enjoy winter activities in the town square.',
+      'body' => '<p>Embrace the cold with our annual Winter Festival! Professional and amateur ice sculptors compete in the town square throughout the day as spectators watch stunning creations take shape from raw blocks of ice. Other activities include a chili cook-off, horse-drawn carriage rides, outdoor fire pits with s\'mores, a winter scavenger hunt for kids, and live music on the outdoor stage. Warming tents with hot drinks are stationed throughout the event area. Free admission; food available for purchase.</p>',
+    ),
+
+    // -----------------------------------------------------------------------
+    // February 2027
+    // -----------------------------------------------------------------------
+
+    // Feb 7 — two events.
+    array(
+      'title' => "Valentine's Day Charity Auction",
+      'date' => '2027-02-07',
+      'time' => '17:00',
+      'summary' => 'Bid on art, experiences, and unique packages — all proceeds support the local food bank.',
+      'body' => '<p>Love is in the air — and so is generosity! The Valentine\'s Day Charity Auction raises funds for the Riverside Food Bank through a lively evening of live and silent auction bidding. Items include original artwork donated by local artists, restaurant and spa packages, weekend getaways, cooking classes, and much more. Enjoy wine, cheese, and chocolates while you browse and bid. Doors open at 5 PM; live auction begins at 7 PM. Tickets required for entry — available online or at the door while space allows.</p>',
+    ),
+    array(
+      'title' => 'Community Love Letter Writing Workshop',
+      'date' => '2027-02-07',
+      'time' => '10:00',
+      'summary' => 'Write heartfelt letters to neighbors, elders, and community heroes who deserve to be appreciated.',
+      'body' => '<p>Put pen to paper and let someone know they matter. The Community Love Letter Writing Workshop invites people of all ages to write letters of appreciation to neighbors living alone, veterans, nursing home residents, teachers, and others in our community who could use a kind word. Stationery, envelopes, stamps, and prompts are provided. Finished letters are delivered by community volunteers. A warm, meaningful way to celebrate the season of love. Drop in anytime between 10 AM and 1 PM.</p>',
+    ),
+
+    // Feb 21 — two events.
+    array(
+      'title' => 'Black History Month Celebration',
+      'date' => '2027-02-21',
+      'time' => '14:00',
+      'summary' => 'A community celebration honoring Black history, culture, and contributions through art and storytelling.',
+      'body' => '<p>Join us for a rich afternoon of celebration and reflection in honor of Black History Month. The program features spoken word performances, a community choir, a gallery of student artwork, storytelling by local elders, and a panel discussion on the history and future of the Black community in our region. A reception with culturally inspired food follows the program. The event is free and open to all. We gather to honor, learn, and build together.</p>',
+    ),
+    array(
+      'title' => 'Genealogy & Family History Workshop',
+      'date' => '2027-02-21',
+      'time' => '10:00',
+      'summary' => 'Learn how to research your family roots using archives, online tools, and oral history.',
+      'body' => '<p>Held in conjunction with Black History Month, this workshop is open to all who want to explore their family history. Local genealogists and library staff guide participants through using census records, vital records, immigration documents, and online databases to trace their roots. Special attention is given to researching African American ancestry, including resources for tracing family histories through and before enslavement. All experience levels welcome. Bring any family documents or photos you already have. Free to attend.</p>',
+    ),
+
+  );
+}

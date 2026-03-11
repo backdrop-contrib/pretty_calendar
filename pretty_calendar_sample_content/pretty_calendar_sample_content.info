@@ -1,0 +1,7 @@
+name = Pretty Calendar Sample Content
+description = Creates an Event content type with sample event nodes for demonstrating the Pretty Calendar module. Includes dates with multiple events.
+backdrop = 1.x
+type = module
+package = Pretty Calendar
+dependencies[] = pretty_calendar
+dependencies[] = date

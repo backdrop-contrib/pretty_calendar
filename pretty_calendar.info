@@ -2,3 +2,4 @@ name = Pretty Calendar
 description = Simple nice calendar module that displays the materials by date.
 backdrop = 1.x
 type = module
+package = Pretty Calendar
