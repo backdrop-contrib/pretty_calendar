@@ -5,11 +5,14 @@
     "theme": "minimal",
     "node_type": "",
     "node_invert": 0,
-    "field_date": "",
+    "date_module": "",
+    "field_name": "",
+    "column_name_start": "",
+    "column_name_end": "",
     "date_format_listing": "short",
+    "upcoming_days": 0,
     "title_words": "event, events",
-    "node_per_page": "20",
-    "preload_tooltips": "-",
-    "tooltip_count": "5",
+    "link_type": "popup",
+    "event_count": 5,
     "separate_languages": 0
 }
