@@ -1,0 +1,10 @@
+<?php
+
+/**
+ * @file
+ * Pretty Calendar Sample Content module.
+ *
+ * Creates an Event content type with sample event nodes for demonstrating
+ * the Pretty Calendar module. Includes several dates with multiple events
+ * to showcase the calendar's multi-event display capabilities.
+ */
